@@ -1,8 +1,8 @@
 # gh-links
 
-A Claude Code plugin that keeps a pane beside the chat with clickable links to every GitHub pull request and issue that shows up in tool output during the session, e.g. from `gh pr create`. Each entry shows its state: draft, ready, merged or closed for PRs, open or closed for issues. States refresh at the end of every turn with one batched `gh api graphql` call, so the GitHub CLI must be installed and signed in.
+A Claude Code plugin that keeps a pane beside the chat with clickable links to every GitHub pull request and issue that shows up in tool output during the session, e.g. from `gh pr create`. Each entry shows its state (draft, ready, merged or closed for PRs, open or closed for issues), and for open PRs the review decision (approved, changes, review) and CI status (✓, ✗, …). Everything refreshes on load, at the end of every turn and every 5 minutes with one batched `gh api graphql` call, so the GitHub CLI must be installed and signed in.
 
-The pane opens by itself on the first link (from 144 terminal columns). `/gh-links` opens it at any width and refreshes the states.
+The pane is 30 columns wide and opens by itself on the first link (from 144 terminal columns). `/gh-links` opens it at any width and refreshes the states.
 
 ## Install
 

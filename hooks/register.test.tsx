@@ -1,6 +1,6 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
-import { extract, toState } from './register'
+import { extract, toCi, toReview, toState } from './register'
 
 const PANE = {
   plugin: 'gh-links',
@@ -43,7 +43,54 @@ test('toState maps GitHub states', () => {
   expect(toState(null)).toBe(undefined)
 })
 
+test('toReview maps the review decision', () => {
+  expect(toReview({ reviewDecision: 'APPROVED' })).toBe('approved')
+  expect(toReview({ reviewDecision: 'CHANGES_REQUESTED' })).toBe('changes')
+  expect(toReview({ reviewDecision: 'REVIEW_REQUIRED' })).toBe('review')
+  expect(toReview({ reviewDecision: null })).toBe(undefined)
+  expect(toReview({ state: 'OPEN' })).toBe(undefined)
+})
+
+test('toCi maps the check rollup', () => {
+  const rollup = (state: string) => ({ commits: { nodes: [{ commit: { statusCheckRollup: { state } } }] } })
+  expect(toCi(rollup('SUCCESS'))).toBe('pass')
+  expect(toCi(rollup('FAILURE'))).toBe('fail')
+  expect(toCi(rollup('ERROR'))).toBe('fail')
+  expect(toCi(rollup('PENDING'))).toBe('pending')
+  expect(toCi({ state: 'OPEN', commits: { nodes: [{ commit: { statusCheckRollup: null } }] } })).toBe(undefined)
+})
+
+test('state and CI are polled every 5 minutes', async ($, on) => {
+  const clock = mock.clock(on)
+  const answers = ['PENDING', 'SUCCESS']
+  let calls = 0
+  on('command.register', () => ({ value: { command: 'gh-links' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  on('tool.call', () => ({ result: { stdout: 'https://github.com/o/repo/pull/5\n' } }))
+  on('process.run', () => {
+    const state = answers[Math.min(calls++, 1)]
+    const r0 = { state: 'OPEN', isDraft: false, reviewDecision: 'APPROVED', commits: { nodes: [{ commit: { statusCheckRollup: { state } } }] } }
+    return { value: { exitCode: 0, stdout: JSON.stringify({ data: { r0 } }), stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'Bash', command: 'gh pr create' })
+  await clock.settle()
+  expect(calls).toBe(1)
+
+  await clock.advance(4 * 60_000)
+  expect(calls).toBe(1)
+  await clock.advance(60_000)
+  expect(calls).toBe(2)
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /repo#5/ }))?.text).toBe('● repo#5 ready approved ✓')
+  await ui.unmount()
+})
+
 test('the pane shows the state gh reports', async ($, on) => {
+  const clock = mock.clock(on)
   on('command.register', () => ({ value: { command: 'gh-links' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
@@ -54,10 +101,9 @@ test('the pane shows the state gh reports', async ($, on) => {
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.tool.call({ tool: 'Bash', command: 'gh pr create --draft' })
-  await $.command.run({ command: 'gh-links', args: '' })
-  await new Promise(r => setTimeout(r, 50))
+  await clock.settle()
 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /draft/ }))?.text).toBe('PR    repo#5 draft')
+  expect((await ui.find({ type: 'Text', text: /draft/ }))?.text).toBe('● repo#5 draft')
   await ui.unmount()
 })
