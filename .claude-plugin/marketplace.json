@@ -1,0 +1,5 @@
+{
+  "name": "claude-gh-links",
+  "owner": { "name": "Julius Knorr" },
+  "plugins": [{ "name": "gh-links", "source": "./" }]
+}

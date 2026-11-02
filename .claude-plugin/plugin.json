@@ -1,0 +1,8 @@
+{
+  "name": "gh-links",
+  "version": "0.1.0",
+  "description": "Pane with clickable links to GitHub PRs and issues seen in this session",
+  "author": { "name": "Julius Knorr" },
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
